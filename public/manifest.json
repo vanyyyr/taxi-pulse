@@ -1,0 +1,18 @@
+{
+  "name": "ТаксиДрайв — Учет смен и расходов",
+  "short_name": "ТаксиДрайв",
+  "description": "Умный личный кабинет водителя такси: учет смен, бензина, аренды, доп. расходов, расчет чистой прибыли и умная аналитика",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#09090b",
+  "theme_color": "#f59e0b",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

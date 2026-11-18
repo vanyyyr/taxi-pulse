@@ -1,36 +1,94 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# 🚖 ТаксиДрайв (TaxiPulse)
 
-## Getting Started
+Современное веб-приложение (PWA) для водителей такси с персональным кабинетом. Оптимизировано для Safari на iPhone («Добавить на экран “Домой”») и деплоя на **Vercel** с поддержкой **Supabase**.
 
-First, run the development server:
+---
 
+## ⚡ Возможности
+
+1. **Личный кабинет водителя**:
+   - Быстрый вход по **номеру телефона** и **4-значному PIN-коду** (без длинных паролей за рулем).
+   - Мгновенная регистрация нового водителя при первом вводе.
+   - Запоминание сессии — при открытии с экрана «Домой» вход происходит автоматически.
+   - Настройка дефолтной стоимости аренды, марки авто, типа топлива и цели на день.
+
+2. **Учет смен (Shift Workflow)**:
+   - **Режим реального времени**: кнопка «Начать смену», секундомер на линии, кнопки быстрых трат в один тап (`+ Заправка`, `+ Еда/Кофе`, `+ Мойка`, `+ Касса/Чай`).
+   - **Все обязательные поля**:
+     * Дата смены
+     * Время работы (автоматически по секундомеру или ввод часов вручную)
+     * Километраж (пробег за смену или разница одометра)
+     * Бензин: литры (л) + сумма (₽)
+     * Грязная прибыль (касса агрегатора + нал + чаевые)
+     * Аренда авто за смену (автоподстановка из настроек водителя)
+     * Доп. расходы (еда, кофе, мойка, штрафы ГИБДД, омывайка) с детальным списком
+   - **Автоматический мгновенный расчет**:
+     * **Чистая прибыль**: `Грязная прибыль - (Аренда + Бензин + Доп. расходы)`
+     * **Чистая ставка в час**: `₽ / час`
+     * **Расход топлива**: `л / 100 км`
+     * **Себестоимость километра пути**: `₽ / км`
+     * **Доход на 1 км**: `₽ / км`
+
+3. **Дневная цель водителя**:
+   - Настраиваемый прогресс-бар (например, «Цель: 5 000 ₽ чистыми за смену»).
+   - Прогноз времени достижения цели в текущем темпе.
+   - Праздничный салют (конфетти) при достижении 100%!
+
+4. **Умный советник и аналитика**:
+   - Дашборд за всё время / 30 дней / 7 дней.
+   - Выявление самого прибыльного дня недели (например: *«В пятницу твоя чистая ставка на +32% выше среднего»*).
+   - Контроль скрытых расходов (*«На кофе и фастфуд уходит 14% чистой прибыли»*).
+   - Мониторинг расхода топлива с предупреждением о перерасходе.
+   - Структура расходов (интерактивный пай-бар: Аренда vs Топливо vs Питание vs Мойка).
+
+5. **История и экспорт**:
+   - Детальный список прошлых смен с редактированием и удалением.
+   - Экспорт всей истории в **Excel (CSV)** с поддержкой русского языка (UTF-8 BOM).
+
+6. **PWA для iPhone Safari**:
+   - Манифест `manifest.json`, иконка Apple Touch Icon.
+   - Полноэкранный режим без рамок браузера.
+   - Safe-area отступы под вырез экрана (Dynamic Island / челка) и домашний индикатор iOS.
+
+---
+
+## 🚀 Быстрый старт
+
+### Локальный запуск
 ```bash
+cd taxi-calc
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
+Откройте в браузере: `http://localhost:3000`
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+---
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## ☁️ Деплой на Vercel
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+1. Загрузите репозиторий на GitHub.
+2. Перейдите на [vercel.com](https://vercel.com) -> **Add New Project**.
+3. Выберите репозиторий и нажмите **Deploy**.
+4. (Опционально) В настройках проекта Vercel укажите Root Directory `taxi-calc` (если проект внутри папки).
 
-## Learn More
+---
 
-To learn more about Next.js, take a look at the following resources:
+## 🗄️ Подключение Supabase (Опционально)
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+Приложение работает **из коробки** в автономном оффлайн-режиме (Local-first). Для синхронизации с облачной базой данных:
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+1. Создайте проект на [supabase.com](https://supabase.com).
+2. В разделе **SQL Editor** выполните скрипт из файла `supabase/schema.sql`.
+3. В файле `.env.local` (или переменных Vercel) укажите:
+   ```env
+   NEXT_PUBLIC_SUPABASE_URL=https://ваш-проект.supabase.co
+   NEXT_PUBLIC_SUPABASE_ANON_KEY=ваш-anon-ключ
+   ```
 
-## Deploy on Vercel
+---
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## 📱 Как установить на iPhone
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+1. Откройте сайт в Safari на iPhone.
+2. Нажмите кнопку **«Поделиться»** (иконка квадрата со стрелкой вверх внизу экрана).
+3. Прокрутите вниз и выберите **«На экран “Домой”»** (Add to Home Screen).
+4. Нажмите **Добавить**. Приложение появится на рабочем столе как полноценная иконка!
