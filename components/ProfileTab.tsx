@@ -1,41 +1,40 @@
 'use client';
 
 import React, { useState } from 'react';
-import { 
-  User, Lock, Save, LogOut, Check, Sliders 
-} from 'lucide-react';
-import { DriverProfile, FuelType } from '@/lib/types';
+import { FuelType, DriverProfile } from '@/lib/types';
 import { updateDriverProfile, hashPin, seedSampleShifts } from '@/lib/storage';
 import { isSupabaseConfigured } from '@/lib/supabase';
+import { Sliders, Database, CheckCircle2 } from 'lucide-react';
 
 interface ProfileTabProps {
   driver: DriverProfile;
   onUpdateDriver: (driver: DriverProfile) => void;
-  onLogout: () => void;
   onRefreshData: () => void;
+  onLogout: () => void;
 }
 
 export function ProfileTab({
   driver,
   onUpdateDriver,
-  onLogout,
   onRefreshData,
+  onLogout,
 }: ProfileTabProps) {
   const [name, setName] = useState(driver.name);
   const [carModel, setCarModel] = useState(driver.car_model);
-  const [fuelType, setFuelType] = useState<FuelType>(driver.fuel_type || 'ai95');
-  const [defaultRent, setDefaultRent] = useState(String(driver.default_rent || 2200));
-  const [defaultGoal, setDefaultGoal] = useState(String(driver.default_goal || 5000));
+  const [fuelType, setFuelType] = useState<FuelType>(driver.fuel_type);
+  const [defaultRent, setDefaultRent] = useState(String(driver.default_rent));
+  const [defaultGoal, setDefaultGoal] = useState(String(driver.default_goal));
   const [defaultFuelConsumption, setDefaultFuelConsumption] = useState(String(driver.default_fuel_consumption || 8.5));
   const [defaultFuelPrice, setDefaultFuelPrice] = useState(String(driver.default_fuel_price || 58));
-
+  
   const [newPin, setNewPin] = useState('');
   const [savedSuccess, setSavedSuccess] = useState(false);
   const [pinSuccess, setPinSuccess] = useState(false);
+  const [loadingDemo, setLoadingDemo] = useState(false);
 
-  const handleSaveProfile = (e: React.FormEvent) => {
+  const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault();
-    const updated = updateDriverProfile({
+    const updated = await updateDriverProfile({
       name: name.trim() || 'Водитель',
       car_model: carModel.trim() || 'Автомобиль',
       fuel_type: fuelType,
@@ -60,7 +59,7 @@ export function ProfileTab({
     }
 
     const pinHash = await hashPin(newPin, driver.phone);
-    const updated = updateDriverProfile({ pin_hash: pinHash });
+    const updated = await updateDriverProfile({ pin_hash: pinHash });
     if (updated) {
       onUpdateDriver(updated);
       setNewPin('');
@@ -69,25 +68,47 @@ export function ProfileTab({
     }
   };
 
-  const handleLoadDemo = () => {
-    seedSampleShifts(driver);
-    onRefreshData();
-    alert('5 демо-смен загружены');
+  const handleLoadDemo = async () => {
+    setLoadingDemo(true);
+    try {
+      await seedSampleShifts(driver);
+      onRefreshData();
+      alert('Демо-смены записаны в базу данных');
+    } finally {
+      setLoadingDemo(false);
+    }
   };
 
   const hasCloud = isSupabaseConfigured();
 
   return (
     <div className="flex flex-col gap-4 pb-6">
-      {/* Driver Identity */}
+      {/* Driver Identity & Cloud DB Badge */}
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-sm font-semibold text-zinc-900 dark:text-white">{name}</h2>
           <span className="font-mono text-xs text-zinc-500 dark:text-zinc-400">{driver.phone}</span>
         </div>
-        <span className="px-2.5 py-1 rounded-full text-[10px] font-mono bg-black/[0.04] dark:bg-zinc-900 border border-black/[0.06] dark:border-zinc-800 text-zinc-600 dark:text-zinc-300">
-          {hasCloud ? 'Supabase' : 'Offline PWA'}
-        </span>
+        <div className="flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-medium bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400">
+          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+          <span>{hasCloud ? 'Облако (PostgreSQL)' : 'Локально'}</span>
+        </div>
+      </div>
+
+      {/* Cloud Storage Notice Card */}
+      <div className="p-3.5 rounded-2xl bg-white/60 dark:bg-zinc-900/60 backdrop-blur-xl border border-black/[0.06] dark:border-white/[0.08] flex items-start gap-3">
+        <div className="w-8 h-8 rounded-xl bg-emerald-500/10 flex items-center justify-center text-emerald-500 shrink-0 mt-0.5">
+          <Database className="w-4 h-4" />
+        </div>
+        <div className="flex flex-col">
+          <div className="flex items-center gap-1.5 text-xs font-semibold text-zinc-800 dark:text-zinc-200">
+            <span>Удаленная база данных активна</span>
+            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
+          </div>
+          <p className="text-[11px] text-zinc-500 dark:text-zinc-400 leading-snug mt-0.5">
+            Память телефона не засоряется. Все смены и чеки записываются на защищенный облачный сервер. Вход и история доступны с любого смартфона по номеру.
+          </p>
+        </div>
       </div>
 
       {/* Main Settings Form */}
@@ -189,7 +210,7 @@ export function ProfileTab({
           type="submit"
           className="w-full min-h-[42px] mt-1 rounded-xl bg-amber-400 hover:bg-amber-300 text-black font-semibold text-xs transition active:scale-[0.98]"
         >
-          {savedSuccess ? 'Сохранено' : 'Сохранить'}
+          {savedSuccess ? 'Сохранено в базу' : 'Сохранить'}
         </button>
       </form>
 
@@ -222,10 +243,11 @@ export function ProfileTab({
       <div className="flex flex-col gap-2">
         <button
           type="button"
+          disabled={loadingDemo}
           onClick={handleLoadDemo}
-          className="w-full min-h-[40px] rounded-xl bg-white/50 dark:bg-zinc-900/50 hover:bg-white dark:hover:bg-zinc-800 border border-black/[0.06] dark:border-zinc-800 text-zinc-600 dark:text-zinc-400 text-xs font-medium transition"
+          className="w-full min-h-[40px] rounded-xl bg-white/50 dark:bg-zinc-900/50 hover:bg-white dark:hover:bg-zinc-800 border border-black/[0.06] dark:border-zinc-800 text-zinc-600 dark:text-zinc-400 text-xs font-medium transition disabled:opacity-50"
         >
-          Загрузить демо-смены
+          {loadingDemo ? 'Запись в базу...' : 'Загрузить демо-смены'}
         </button>
 
         <button

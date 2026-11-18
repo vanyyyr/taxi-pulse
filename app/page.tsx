@@ -10,6 +10,7 @@ import {
   saveActiveShift, 
   startNewShift, 
   getCompletedShifts, 
+  fetchCompletedShifts,
   saveCompletedShift, 
   deleteCompletedShift 
 } from '@/lib/storage';
@@ -40,6 +41,15 @@ export default function HomePage() {
   const [editingShift, setEditingShift] = useState<Shift | null>(null);
   const [isActiveEnding, setIsActiveEnding] = useState(false);
 
+  const refreshShifts = useCallback(async (driverId: string) => {
+    const cached = getCompletedShifts(driverId);
+    if (cached.length > 0) {
+      setCompletedShifts(cached);
+    }
+    const cloudList = await fetchCompletedShifts(driverId);
+    setCompletedShifts(cloudList);
+  }, []);
+
   // Initial load & Theme setup
   useEffect(() => {
     setIsClient(true);
@@ -58,10 +68,9 @@ export default function HomePage() {
       setDriver(savedDriver);
       const act = getActiveShift(savedDriver.id);
       setActiveShift(act);
-      const list = getCompletedShifts(savedDriver.id);
-      setCompletedShifts(list);
+      refreshShifts(savedDriver.id);
     }
-  }, []);
+  }, [refreshShifts]);
 
   const handleToggleTheme = () => {
     const nextTheme = theme === 'dark' ? 'light' : 'dark';
@@ -75,11 +84,6 @@ export default function HomePage() {
       document.documentElement.setAttribute('data-theme', 'light');
     }
   };
-
-  const refreshShifts = useCallback((driverId: string) => {
-    const list = getCompletedShifts(driverId);
-    setCompletedShifts(list);
-  }, []);
 
   const handleAuthSuccess = (newDriver: DriverProfile) => {
     setDriver(newDriver);
@@ -97,9 +101,9 @@ export default function HomePage() {
     }
   };
 
-  const handleUpdateGoal = (newGoal: number) => {
+  const handleUpdateGoal = async (newGoal: number) => {
     if (!driver) return;
-    const updated = updateDriverProfile({ default_goal: newGoal });
+    const updated = await updateDriverProfile({ default_goal: newGoal });
     if (updated) {
       setDriver(updated);
     }
@@ -237,7 +241,7 @@ export default function HomePage() {
     saveActiveShift(driver.id, updatedShift);
   };
 
-  const handleSaveShift = (saved: Shift) => {
+  const handleSaveShift = async (saved: Shift) => {
     if (!driver) return;
 
     if (activeShift && (isActiveEnding || activeShift.id === saved.id)) {
@@ -246,14 +250,14 @@ export default function HomePage() {
       setIsActiveEnding(false);
     }
 
-    const updatedList = saveCompletedShift(driver.id, saved);
+    const updatedList = await saveCompletedShift(driver.id, saved);
     setCompletedShifts(updatedList);
     setEditingShift(null);
   };
 
-  const handleDeleteShift = (shiftId: string) => {
+  const handleDeleteShift = async (shiftId: string) => {
     if (!driver) return;
-    const updated = deleteCompletedShift(driver.id, shiftId);
+    const updated = await deleteCompletedShift(driver.id, shiftId);
     setCompletedShifts(updated);
   };
 

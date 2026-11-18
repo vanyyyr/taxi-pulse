@@ -1,6 +1,6 @@
 import { DriverProfile, Shift, ExpenseItem } from './types';
 import { calculateShiftMetrics } from './calculations';
-import { getSupabase } from './supabase';
+import { getSupabase, isSupabaseConfigured } from './supabase';
 
 const STORAGE_KEYS = {
   CURRENT_DRIVER: 'taxipulse_current_driver',
@@ -8,6 +8,31 @@ const STORAGE_KEYS = {
   ACTIVE_SHIFT_PREFIX: 'taxipulse_active_shift_',
   SHIFTS_PREFIX: 'taxipulse_shifts_',
 };
+
+/**
+ * Генерация валидного UUID v4 для Postgres (Supabase)
+ */
+export function generateUUID(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    try {
+      return crypto.randomUUID();
+    } catch {
+      // fallback
+    }
+  }
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
+    const r = (Math.random() * 16) | 0;
+    const v = c === 'x' ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
+}
+
+/**
+ * Проверка, является ли строка валидным UUID
+ */
+export function isUUID(str: string): boolean {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(str);
+}
 
 /**
  * Простой и надежный хэш для 4-значного PIN-кода
@@ -44,7 +69,7 @@ export function normalizePhone(rawPhone: string): string {
 }
 
 /**
- * Красивое форматирование номера: +7 (999) 123-45-67
+ * Форматирование номера: +7 (999) 123-45-67
  */
 export function formatPhone(rawPhone: string): string {
   const digits = normalizePhone(rawPhone);
@@ -80,7 +105,10 @@ export function setCurrentDriver(driver: DriverProfile | null): void {
   }
 }
 
-export async function loginOrRegisterDriver(phone: string, pin: string): Promise<{ success: boolean; driver?: DriverProfile; message?: string }> {
+export async function loginOrRegisterDriver(
+  phone: string, 
+  pin: string
+): Promise<{ success: boolean; driver?: DriverProfile; message?: string }> {
   const cleanPhone = normalizePhone(phone);
   if (cleanPhone.length < 10) {
     return { success: false, message: 'Введите корректный номер телефона (не менее 10 цифр)' };
@@ -90,9 +118,9 @@ export async function loginOrRegisterDriver(phone: string, pin: string): Promise
   }
 
   const pinHash = await hashPin(pin, cleanPhone);
-
-  // 1. Попытка через Supabase (если подключен)
   const supabase = getSupabase();
+
+  // 1. Попытка через Supabase Cloud Database (приоритет)
   if (supabase) {
     try {
       const { data, error } = await supabase
@@ -104,16 +132,18 @@ export async function loginOrRegisterDriver(phone: string, pin: string): Promise
       if (error && error.code !== 'PGRST116') {
         console.warn('Supabase fetch error, fallback to local:', error);
       } else if (data) {
-        // Водитель уже существует в Supabase
+        // Водитель уже есть в базе данных
         if (data.pin_hash === pinHash) {
           const profile: DriverProfile = {
             id: data.id,
             phone: data.phone,
             name: data.name,
-            car_model: data.car_model || 'Эконом',
+            car_model: data.car_model || 'Solaris / Polo / Rio',
             fuel_type: data.fuel_type || 'ai95',
             default_rent: Number(data.default_rent) || 2200,
             default_goal: Number(data.default_goal) || 5000,
+            default_fuel_consumption: Number(data.default_fuel_consumption) || 8.5,
+            default_fuel_price: Number(data.default_fuel_price) || 58,
             pin_hash: data.pin_hash,
             created_at: data.created_at,
           };
@@ -123,21 +153,23 @@ export async function loginOrRegisterDriver(phone: string, pin: string): Promise
           return { success: false, message: 'Неверный 4-значный PIN-код' };
         }
       } else {
-        // Создаем нового водителя в Supabase
-        const newId = crypto.randomUUID();
+        // Создаем нового водителя в удаленной базе данных
+        const newId = generateUUID();
         const newProfile: DriverProfile = {
           id: newId,
           phone: cleanPhone,
           name: `Водитель ${cleanPhone.slice(-4)}`,
-          car_model: 'Эконом (Kia Rio / Solaris)',
+          car_model: 'Solaris / Polo / Rio',
           fuel_type: 'ai95',
           default_rent: 2200,
           default_goal: 5000,
+          default_fuel_consumption: 8.5,
+          default_fuel_price: 58,
           pin_hash: pinHash,
           created_at: new Date().toISOString(),
         };
 
-        await supabase.from('driver_profiles').insert({
+        const { error: insertError } = await supabase.from('driver_profiles').insert({
           id: newProfile.id,
           phone: newProfile.phone,
           name: newProfile.name,
@@ -145,18 +177,24 @@ export async function loginOrRegisterDriver(phone: string, pin: string): Promise
           fuel_type: newProfile.fuel_type,
           default_rent: newProfile.default_rent,
           default_goal: newProfile.default_goal,
+          default_fuel_consumption: newProfile.default_fuel_consumption,
+          default_fuel_price: newProfile.default_fuel_price,
           pin_hash: newProfile.pin_hash,
         });
+
+        if (insertError) {
+          console.error('Supabase profile insert error:', insertError);
+        }
 
         setCurrentDriver(newProfile);
         return { success: true, driver: newProfile };
       }
     } catch (e) {
-      console.warn('Supabase login exception, using local:', e);
+      console.warn('Supabase connection error:', e);
     }
   }
 
-  // 2. Локальное хранилище (Offline / Local-first)
+  // 2. Локальное хранилище (Fallback)
   if (typeof window === 'undefined') {
     return { success: false, message: 'Хранилище недоступно' };
   }
@@ -179,9 +217,8 @@ export async function loginOrRegisterDriver(phone: string, pin: string): Promise
     }
   }
 
-  // Новый водитель (регистрация в один шаг)
   const newProfile: DriverProfile = {
-    id: 'local_' + cleanPhone,
+    id: generateUUID(),
     phone: cleanPhone,
     name: `Водитель ${cleanPhone.slice(-4)}`,
     car_model: 'Solaris / Polo / Rio',
@@ -201,7 +238,7 @@ export async function loginOrRegisterDriver(phone: string, pin: string): Promise
   return { success: true, driver: newProfile };
 }
 
-export function updateDriverProfile(updated: Partial<DriverProfile>): DriverProfile | null {
+export async function updateDriverProfile(updated: Partial<DriverProfile>): Promise<DriverProfile | null> {
   const current = getCurrentDriver();
   if (!current) return null;
 
@@ -222,27 +259,32 @@ export function updateDriverProfile(updated: Partial<DriverProfile>): DriverProf
     console.error(e);
   }
 
-  // Фоновая синхронизация с Supabase
+  // Синхронизация с Supabase Cloud Database
   const supabase = getSupabase();
-  if (supabase && !merged.id.startsWith('local_')) {
-    supabase
-      .from('driver_profiles')
-      .update({
-        name: merged.name,
-        car_model: merged.car_model,
-        fuel_type: merged.fuel_type,
-        default_rent: merged.default_rent,
-        default_goal: merged.default_goal,
-      })
-      .eq('id', merged.id)
-      .then();
+  if (supabase && isUUID(merged.id)) {
+    try {
+      await supabase
+        .from('driver_profiles')
+        .update({
+          name: merged.name,
+          car_model: merged.car_model,
+          fuel_type: merged.fuel_type,
+          default_rent: merged.default_rent,
+          default_goal: merged.default_goal,
+          default_fuel_consumption: merged.default_fuel_consumption,
+          default_fuel_price: merged.default_fuel_price,
+        })
+        .eq('id', merged.id);
+    } catch (e) {
+      console.error('Failed to sync profile update to Supabase:', e);
+    }
   }
 
   return merged;
 }
 
 // -------------------------------------------------------------
-// АКТИВНАЯ СМЕНА (РЕАЛЬНОЕ ВРЕМЯ)
+// АКТИВНАЯ СМЕНА
 // -------------------------------------------------------------
 
 export function getActiveShift(driverId: string): Shift | null {
@@ -272,7 +314,7 @@ export function startNewShift(driver: DriverProfile, initialMileage: number = 0)
   const timeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
 
   const newShift: Shift = {
-    id: 'shift_' + Date.now(),
+    id: generateUUID(),
     driver_id: driver.id,
     date: dateStr,
     start_time: timeStr,
@@ -290,7 +332,7 @@ export function startNewShift(driver: DriverProfile, initialMileage: number = 0)
     hourly_rate: 0,
     cost_per_km: 0,
     revenue_per_km: 0,
-    fuel_consumption_per_100km: 0,
+    fuel_consumption_per_100km: driver.default_fuel_consumption || 8.5,
     status: 'active',
     created_at: now.toISOString(),
   };
@@ -300,7 +342,7 @@ export function startNewShift(driver: DriverProfile, initialMileage: number = 0)
 }
 
 // -------------------------------------------------------------
-// ИСТОРИЯ ЗАВЕРШЕННЫХ СМЕН
+// ИСТОРИЯ СМЕН (ОБЛАЧНАЯ БАЗА + ЛЕГКИЙ КЭШ)
 // -------------------------------------------------------------
 
 export function getCompletedShifts(driverId: string): Shift[] {
@@ -316,56 +358,126 @@ export function getCompletedShifts(driverId: string): Shift[] {
   }
 }
 
-export function saveCompletedShift(driverId: string, shift: Shift): Shift[] {
+/**
+ * Загрузка смен из удаленной базы данных Supabase
+ */
+export async function fetchCompletedShifts(driverId: string): Promise<Shift[]> {
+  const supabase = getSupabase();
+  if (supabase && isUUID(driverId)) {
+    try {
+      const { data, error } = await supabase
+        .from('shifts')
+        .select('*')
+        .eq('driver_id', driverId)
+        .order('date', { ascending: false });
+
+      if (!error && data) {
+        const shifts: Shift[] = data.map(row => ({
+          id: row.id,
+          driver_id: row.driver_id,
+          date: row.date,
+          start_time: row.start_time,
+          end_time: row.end_time || undefined,
+          duration_hours: Number(row.duration_hours) || 0,
+          mileage_km: Number(row.mileage_km) || 0,
+          start_odometer: row.start_odometer ? Number(row.start_odometer) : undefined,
+          end_odometer: row.end_odometer ? Number(row.end_odometer) : undefined,
+          gross_revenue: Number(row.gross_revenue) || 0,
+          fuel_liters: Number(row.fuel_liters) || 0,
+          fuel_cost: Number(row.fuel_cost) || 0,
+          rent_cost: Number(row.rent_cost) || 0,
+          other_expenses_total: Number(row.other_expenses_total) || 0,
+          expenses: Array.isArray(row.expenses) ? row.expenses : [],
+          total_expenses: Number(row.total_expenses) || 0,
+          net_profit: Number(row.net_profit) || 0,
+          hourly_rate: Number(row.hourly_rate) || 0,
+          cost_per_km: Number(row.cost_per_km) || 0,
+          revenue_per_km: Number(row.revenue_per_km) || 0,
+          fuel_consumption_per_100km: Number(row.fuel_consumption_per_100km) || 0,
+          status: row.status as 'completed' | 'active',
+          notes: row.notes || undefined,
+          created_at: row.created_at,
+        }));
+
+        // Сохраняем в кэш
+        if (typeof window !== 'undefined') {
+          localStorage.setItem(STORAGE_KEYS.SHIFTS_PREFIX + driverId, JSON.stringify(shifts));
+        }
+
+        return shifts;
+      }
+    } catch (e) {
+      console.warn('Failed to fetch shifts from Supabase:', e);
+    }
+  }
+
+  return getCompletedShifts(driverId);
+}
+
+export async function saveCompletedShift(driverId: string, shift: Shift): Promise<Shift[]> {
+  const shiftToSave: Shift = {
+    ...shift,
+    id: isUUID(shift.id) ? shift.id : generateUUID(),
+  };
+
   const currentList = getCompletedShifts(driverId);
-  const existingIdx = currentList.findIndex(s => s.id === shift.id);
+  const existingIdx = currentList.findIndex(s => s.id === shiftToSave.id);
 
   let updatedList: Shift[];
   if (existingIdx >= 0) {
     updatedList = [...currentList];
-    updatedList[existingIdx] = shift;
+    updatedList[existingIdx] = shiftToSave;
   } else {
-    updatedList = [shift, ...currentList];
+    updatedList = [shiftToSave, ...currentList];
   }
 
-  // Сохраняем в localStorage
+  // Обновляем локальный кэш
   if (typeof window !== 'undefined') {
     localStorage.setItem(STORAGE_KEYS.SHIFTS_PREFIX + driverId, JSON.stringify(updatedList));
   }
 
-  // Фоновая синхронизация с Supabase
+  // Сохраняем в базу данных Supabase
   const supabase = getSupabase();
-  if (supabase && !driverId.startsWith('local_')) {
-    supabase.from('shifts').upsert({
-      id: shift.id.startsWith('shift_') ? undefined : shift.id,
-      driver_id: driverId,
-      date: shift.date,
-      start_time: shift.start_time,
-      end_time: shift.end_time,
-      duration_hours: shift.duration_hours,
-      mileage_km: shift.mileage_km,
-      start_odometer: shift.start_odometer,
-      end_odometer: shift.end_odometer,
-      gross_revenue: shift.gross_revenue,
-      fuel_liters: shift.fuel_liters,
-      fuel_cost: shift.fuel_cost,
-      rent_cost: shift.rent_cost,
-      other_expenses_total: shift.other_expenses_total,
-      total_expenses: shift.total_expenses,
-      net_profit: shift.net_profit,
-      hourly_rate: shift.hourly_rate,
-      cost_per_km: shift.cost_per_km,
-      revenue_per_km: shift.revenue_per_km,
-      fuel_consumption_per_100km: shift.fuel_consumption_per_100km,
-      status: 'completed',
-      notes: shift.notes,
-    }).then();
+  if (supabase && isUUID(driverId)) {
+    try {
+      const { error } = await supabase.from('shifts').upsert({
+        id: shiftToSave.id,
+        driver_id: driverId,
+        date: shiftToSave.date,
+        start_time: shiftToSave.start_time,
+        end_time: shiftToSave.end_time || null,
+        duration_hours: shiftToSave.duration_hours,
+        mileage_km: shiftToSave.mileage_km,
+        start_odometer: shiftToSave.start_odometer || null,
+        end_odometer: shiftToSave.end_odometer || null,
+        gross_revenue: shiftToSave.gross_revenue,
+        fuel_liters: shiftToSave.fuel_liters,
+        fuel_cost: shiftToSave.fuel_cost,
+        rent_cost: shiftToSave.rent_cost,
+        other_expenses_total: shiftToSave.other_expenses_total,
+        expenses: shiftToSave.expenses || [],
+        total_expenses: shiftToSave.total_expenses,
+        net_profit: shiftToSave.net_profit,
+        hourly_rate: shiftToSave.hourly_rate,
+        cost_per_km: shiftToSave.cost_per_km,
+        revenue_per_km: shiftToSave.revenue_per_km,
+        fuel_consumption_per_100km: shiftToSave.fuel_consumption_per_100km,
+        status: 'completed',
+        notes: shiftToSave.notes || null,
+      });
+
+      if (error) {
+        console.error('Error saving shift to Supabase:', error);
+      }
+    } catch (e) {
+      console.error('Exception saving shift to Supabase:', e);
+    }
   }
 
   return updatedList;
 }
 
-export function deleteCompletedShift(driverId: string, shiftId: string): Shift[] {
+export async function deleteCompletedShift(driverId: string, shiftId: string): Promise<Shift[]> {
   const currentList = getCompletedShifts(driverId);
   const updatedList = currentList.filter(s => s.id !== shiftId);
 
@@ -374,18 +486,22 @@ export function deleteCompletedShift(driverId: string, shiftId: string): Shift[]
   }
 
   const supabase = getSupabase();
-  if (supabase && !driverId.startsWith('local_') && !shiftId.startsWith('shift_')) {
-    supabase.from('shifts').delete().eq('id', shiftId).then();
+  if (supabase && isUUID(shiftId)) {
+    try {
+      await supabase.from('shifts').delete().eq('id', shiftId);
+    } catch (e) {
+      console.error('Exception deleting shift from Supabase:', e);
+    }
   }
 
   return updatedList;
 }
 
 /**
- * Инициализация демонстрационных данных, если водитель только что зарегистрировался
+ * Инициализация демонстрационных данных при необходимости
  */
-export function seedSampleShifts(driver: DriverProfile): Shift[] {
-  const existing = getCompletedShifts(driver.id);
+export async function seedSampleShifts(driver: DriverProfile): Promise<Shift[]> {
+  const existing = await fetchCompletedShifts(driver.id);
   if (existing.length > 0) return existing;
 
   const today = new Date();
@@ -400,21 +516,22 @@ export function seedSampleShifts(driver: DriverProfile): Shift[] {
     { gross: 11200, fuelL: 36, fuelCost: 1980, hours: 12.5, km: 280, rent: driver.default_rent, food: 600, coffee: 300 },
   ];
 
-  sampleData.forEach((item, idx) => {
+  for (let i = 0; i < sampleData.length; i++) {
+    const item = sampleData[i];
     const d = new Date(today);
-    d.setDate(today.getDate() - daysBack[idx]);
+    d.setDate(today.getDate() - daysBack[i]);
     const dateStr = d.toISOString().split('T')[0];
 
     const expenses: ExpenseItem[] = [];
-    if (item.food) expenses.push({ id: 'f_' + idx, category: 'food', amount: item.food, created_at: '' });
-    if (item.coffee) expenses.push({ id: 'c_' + idx, category: 'coffee', amount: item.coffee, created_at: '' });
-    if (item.wash) expenses.push({ id: 'w_' + idx, category: 'wash', amount: item.wash, created_at: '' });
-    if (item.fine) expenses.push({ id: 'fn_' + idx, category: 'fine', amount: item.fine, comment: 'Превышение 20-40 км/ч', created_at: '' });
+    if (item.food) expenses.push({ id: generateUUID(), category: 'food', amount: item.food, created_at: d.toISOString() });
+    if (item.coffee) expenses.push({ id: generateUUID(), category: 'coffee', amount: item.coffee, created_at: d.toISOString() });
+    if (item.wash) expenses.push({ id: generateUUID(), category: 'wash', amount: item.wash, created_at: d.toISOString() });
+    if (item.fine) expenses.push({ id: generateUUID(), category: 'fine', amount: item.fine, comment: 'Парковка', created_at: d.toISOString() });
 
     const metrics = calculateShiftMetrics({
       date: dateStr,
       start_time: '08:00',
-      end_time: '19:00',
+      end_time: '20:00',
       duration_hours: item.hours,
       mileage_km: item.km,
       gross_revenue: item.gross,
@@ -424,12 +541,12 @@ export function seedSampleShifts(driver: DriverProfile): Shift[] {
       expenses,
     });
 
-    sampleShifts.push({
-      id: 'sample_' + idx,
+    const shiftObj: Shift = {
+      id: generateUUID(),
       driver_id: driver.id,
       date: dateStr,
       start_time: '08:00',
-      end_time: '19:00',
+      end_time: '20:00',
       duration_hours: metrics.duration_hours,
       mileage_km: metrics.mileage_km,
       gross_revenue: item.gross,
@@ -446,11 +563,10 @@ export function seedSampleShifts(driver: DriverProfile): Shift[] {
       fuel_consumption_per_100km: metrics.fuel_consumption_per_100km,
       status: 'completed',
       created_at: d.toISOString(),
-    });
-  });
+    };
 
-  if (typeof window !== 'undefined') {
-    localStorage.setItem(STORAGE_KEYS.SHIFTS_PREFIX + driver.id, JSON.stringify(sampleShifts));
+    await saveCompletedShift(driver.id, shiftObj);
+    sampleShifts.push(shiftObj);
   }
 
   return sampleShifts;
