@@ -1,6 +1,6 @@
 import { DriverProfile, Shift, ExpenseItem } from './types';
 import { calculateShiftMetrics } from './calculations';
-import { getSupabase, isSupabaseConfigured } from './supabase';
+import { getSupabase } from './supabase';
 
 const STORAGE_KEYS = {
   CURRENT_DRIVER: 'taxipulse_current_driver',
@@ -62,8 +62,14 @@ export async function hashPin(pin: string, salt: string = 'taxipulse_salt'): Pro
  */
 export function normalizePhone(rawPhone: string): string {
   const digits = rawPhone.replace(/\D/g, '');
-  if (digits.startsWith('8') && digits.length === 11) {
+  if (digits.length === 10 && digits.startsWith('9')) {
+    return '7' + digits;
+  }
+  if (digits.length === 11 && digits.startsWith('8')) {
     return '7' + digits.slice(1);
+  }
+  if (digits.length === 11 && digits.startsWith('7')) {
+    return digits;
   }
   return digits;
 }
@@ -72,7 +78,15 @@ export function normalizePhone(rawPhone: string): string {
  * Форматирование номера: +7 (999) 123-45-67
  */
 export function formatPhone(rawPhone: string): string {
-  const digits = normalizePhone(rawPhone);
+  let digits = rawPhone.replace(/\D/g, '');
+  if (digits.startsWith('8') && digits.length === 11) {
+    digits = '7' + digits.slice(1);
+  } else if (digits.length === 10 && digits.startsWith('9')) {
+    digits = '7' + digits;
+  } else if (!digits.startsWith('7') && digits.length > 0 && digits.startsWith('9')) {
+    digits = '7' + digits;
+  }
+
   if (!digits) return '';
   if (digits.length <= 1) return `+${digits}`;
   if (digits.length <= 4) return `+${digits.slice(0, 1)} (${digits.slice(1)}`;
@@ -273,6 +287,7 @@ export async function updateDriverProfile(updated: Partial<DriverProfile>): Prom
           default_goal: merged.default_goal,
           default_fuel_consumption: merged.default_fuel_consumption,
           default_fuel_price: merged.default_fuel_price,
+          pin_hash: merged.pin_hash,
         })
         .eq('id', merged.id);
     } catch (e) {

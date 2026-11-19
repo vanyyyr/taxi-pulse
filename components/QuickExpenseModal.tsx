@@ -1,7 +1,11 @@
 'use client';
 
 import React, { useState } from 'react';
-import { X, Fuel, Coffee, Utensils, Sparkles, AlertOctagon, Plus, DollarSign } from 'lucide-react';
+import { motion } from 'framer-motion';
+import { 
+  X, Fuel, DollarSign, Utensils, Coffee, Sparkles, 
+  AlertOctagon, Plus 
+} from 'lucide-react';
 import { ExpenseCategory, ExpenseItem } from '@/lib/types';
 
 interface QuickExpenseModalProps {
@@ -30,20 +34,18 @@ export function QuickExpenseModal({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    const numAmount = parseFloat(amount) || 0;
+    const parsedAmount = parseFloat(amount);
+    if (!parsedAmount || parsedAmount <= 0) return;
 
     if (type === 'revenue') {
-      if (numAmount <= 0) return;
-      onAddRevenue(numAmount);
+      onAddRevenue(parsedAmount);
     } else if (type === 'fuel') {
-      const numLiters = parseFloat(liters) || 0;
-      if (numAmount <= 0) return;
-      onAddFuel(numLiters, numAmount);
+      const parsedLiters = parseFloat(liters) || 0;
+      onAddFuel(parsedLiters, parsedAmount);
     } else {
-      if (numAmount <= 0) return;
       onAddExpense({
         category,
-        amount: numAmount,
+        amount: parsedAmount,
         comment: comment.trim() || undefined,
       });
     }
@@ -63,29 +65,35 @@ export function QuickExpenseModal({
   ];
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/75 backdrop-blur-sm p-4 safe-bottom">
-      <div className="w-full max-w-sm rounded-2xl bg-zinc-900 border border-zinc-800 p-5 flex flex-col">
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-md p-4 safe-bottom safe-top safe-left safe-right">
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        exit={{ opacity: 0, y: 20 }}
+        transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
+        className="w-full max-w-sm rounded-3xl liquid-glass-elevated p-5 flex flex-col text-zinc-900 dark:text-zinc-100 shadow-2xl relative"
+      >
         {/* Header */}
-        <div className="flex items-center justify-between pb-3 border-b border-zinc-800">
-          <div className="flex items-center gap-2">
-            <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${
+        <div className="flex items-center justify-between pb-3 border-b border-black/[0.06] dark:border-white/[0.08]">
+          <div className="flex items-center gap-2.5">
+            <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${
               type === 'revenue' 
-                ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' 
+                ? 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20' 
                 : type === 'fuel' 
-                ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20' 
-                : 'bg-rose-500/10 text-rose-400 border border-rose-500/20'
+                ? 'bg-amber-500/10 text-amber-500 border border-amber-500/20' 
+                : 'bg-rose-500/10 text-rose-500 border border-rose-500/20'
             }`}>
               {type === 'revenue' && <DollarSign className="w-4 h-4" />}
               {type === 'fuel' && <Fuel className="w-4 h-4" />}
               {type === 'expense' && <Utensils className="w-4 h-4" />}
             </div>
             <div>
-              <h3 className="font-semibold text-xs text-white">
+              <h3 className="font-semibold text-xs text-zinc-900 dark:text-white">
                 {type === 'revenue' && 'Добавить выручку'}
                 {type === 'fuel' && 'Заправка топливом'}
                 {type === 'expense' && 'Добавить расход'}
               </h3>
-              <p className="text-[10px] text-zinc-400">
+              <p className="text-[10px] text-zinc-500 dark:text-zinc-400">
                 {type === 'revenue' && 'Увеличит кассу смены'}
                 {type === 'fuel' && 'Рассчитает расход л/100 км'}
                 {type === 'expense' && 'Вычитается из чистой прибыли'}
@@ -93,8 +101,10 @@ export function QuickExpenseModal({
             </div>
           </div>
           <button
+            type="button"
             onClick={onClose}
-            className="p-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-800 transition"
+            aria-label="Закрыть окно"
+            className="w-11 h-11 min-w-[44px] min-h-[44px] flex items-center justify-center -mr-2 rounded-xl text-zinc-400 hover:text-zinc-700 dark:hover:text-white cursor-pointer transition-colors"
           >
             <X className="w-4 h-4" />
           </button>
@@ -104,24 +114,25 @@ export function QuickExpenseModal({
         <form onSubmit={handleSubmit} className="mt-4 flex flex-col gap-3">
           {type === 'expense' && (
             <div>
-              <label className="block text-[11px] font-medium text-zinc-400 mb-1.5">
+              <label className="block text-[11px] font-medium text-zinc-500 dark:text-zinc-400 mb-1.5">
                 Категория
               </label>
               <div className="grid grid-cols-2 gap-1.5">
                 {categories.map(c => (
-                  <button
+                  <motion.button
+                    whileTap={{ scale: 0.97 }}
                     key={c.id}
                     type="button"
                     onClick={() => setCategory(c.id)}
-                    className={`min-h-[40px] flex items-center gap-2 p-2 rounded-lg border text-xs transition ${
+                    className={`min-h-[44px] flex items-center gap-2 p-2.5 rounded-xl border text-xs transition cursor-pointer ${
                       category === c.id
-                        ? 'bg-amber-400/10 border-amber-400 text-amber-300 font-semibold'
-                        : 'bg-zinc-950 border-zinc-800 text-zinc-400 hover:text-zinc-200'
+                        ? 'bg-amber-400/15 border-amber-400 text-amber-500 dark:text-amber-300 font-semibold shadow-sm'
+                        : 'liquid-glass-card text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200'
                     }`}
                   >
                     {c.icon}
                     <span>{c.label}</span>
-                  </button>
+                  </motion.button>
                 ))}
               </div>
             </div>
@@ -129,7 +140,7 @@ export function QuickExpenseModal({
 
           {type === 'fuel' && (
             <div>
-              <label className="block text-[11px] font-medium text-zinc-400 mb-1">
+              <label className="block text-[11px] font-medium text-zinc-500 dark:text-zinc-400 mb-1">
                 Объем бензина (литры)
               </label>
               <input
@@ -140,13 +151,13 @@ export function QuickExpenseModal({
                 placeholder="25.0"
                 value={liters}
                 onChange={e => setLiters(e.target.value)}
-                className="w-full min-h-[42px] px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-white font-mono text-sm focus:outline-none focus:border-amber-400"
+                className="w-full min-h-[44px] px-3.5 py-2 liquid-glass-input text-zinc-900 dark:text-white font-mono text-[16px] md:text-sm focus:outline-none focus:border-amber-400"
               />
             </div>
           )}
 
           <div>
-            <label className="block text-[11px] font-medium text-zinc-400 mb-1">
+            <label className="block text-[11px] font-medium text-zinc-500 dark:text-zinc-400 mb-1">
               {type === 'revenue' ? 'Сумма заказа / чаевых (₽)' : 'Сумма (₽)'}
             </label>
             <input
@@ -156,13 +167,13 @@ export function QuickExpenseModal({
               placeholder="0"
               value={amount}
               onChange={e => setAmount(e.target.value)}
-              className="w-full min-h-[44px] px-3.5 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-white font-mono font-bold text-base focus:outline-none focus:border-amber-400"
+              className="w-full min-h-[44px] px-3.5 py-2 liquid-glass-input text-zinc-900 dark:text-white font-mono font-bold text-[16px] md:text-base focus:outline-none focus:border-amber-400"
             />
           </div>
 
           {type === 'expense' && (
             <div>
-              <label className="block text-[11px] font-medium text-zinc-400 mb-1">
+              <label className="block text-[11px] font-medium text-zinc-500 dark:text-zinc-400 mb-1">
                 Заметка (необязательно)
               </label>
               <input
@@ -170,24 +181,25 @@ export function QuickExpenseModal({
                 placeholder="Например: кофе на АЗС"
                 value={comment}
                 onChange={e => setComment(e.target.value)}
-                className="w-full min-h-[40px] px-3 py-1.5 bg-zinc-950 border border-zinc-800 rounded-lg text-white text-xs focus:outline-none focus:border-amber-400"
+                className="w-full min-h-[44px] px-3.5 py-2 liquid-glass-input text-zinc-900 dark:text-white text-[16px] md:text-xs focus:outline-none focus:border-amber-400"
               />
             </div>
           )}
 
-          <button
+          <motion.button
+            whileTap={{ scale: 0.97 }}
             type="submit"
             disabled={!amount || parseFloat(amount) <= 0}
-            className={`w-full min-h-[44px] mt-1 py-2.5 rounded-lg font-semibold text-xs flex items-center justify-center transition active:scale-[0.98] disabled:opacity-40 ${
+            className={`w-full min-h-[44px] mt-1 py-2.5 rounded-xl font-semibold text-xs flex items-center justify-center transition disabled:opacity-40 cursor-pointer ${
               type === 'revenue'
-                ? 'bg-emerald-400 hover:bg-emerald-300 text-black'
-                : 'bg-amber-400 hover:bg-amber-300 text-black'
+                ? 'bg-emerald-400 hover:bg-emerald-300 text-black shadow-sm'
+                : 'bg-amber-400 hover:bg-amber-300 text-black shadow-sm'
             }`}
           >
             Записать
-          </button>
+          </motion.button>
         </form>
-      </div>
+      </motion.div>
     </div>
   );
 }

@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { ChevronDown, Check, X } from 'lucide-react';
 import { calculateGoalProgress, formatCurrency } from '@/lib/calculations';
 
@@ -19,11 +20,12 @@ export function GoalProgressBar({
 }: GoalProgressBarProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [customGoal, setCustomGoal] = useState(String(targetGoal || 5000));
-  const progress = calculateGoalProgress(currentNetProfit, targetGoal);
-
-  useEffect(() => {
+  const [prevTargetGoal, setPrevTargetGoal] = useState(targetGoal);
+  if (targetGoal !== prevTargetGoal) {
+    setPrevTargetGoal(targetGoal);
     setCustomGoal(String(targetGoal || 5000));
-  }, [targetGoal]);
+  }
+  const progress = calculateGoalProgress(currentNetProfit, targetGoal);
 
   const handleSelectPreset = (amount: number) => {
     setCustomGoal(String(amount));
@@ -64,70 +66,87 @@ export function GoalProgressBar({
 
         {/* Goal Selector Pill */}
         <div className="relative">
-          <button
+          <motion.button
+            whileTap={{ scale: 0.97 }}
             type="button"
             onClick={() => setIsEditing(!isEditing)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/80 dark:bg-zinc-900/80 backdrop-blur-xl border border-black/[0.06] dark:border-white/[0.08] text-xs font-medium text-zinc-800 dark:text-zinc-200 transition active:scale-95 shadow-sm"
+            aria-label="Изменить цель смены"
+            className="min-h-[44px] flex items-center gap-1.5 px-3.5 py-2 rounded-full liquid-glass-pill text-xs font-medium text-zinc-800 dark:text-zinc-200 transition shadow-sm cursor-pointer"
           >
             <span className="text-zinc-400 dark:text-zinc-500 text-[11px]">Цель:</span>
             <span className="font-mono font-semibold text-amber-500 dark:text-amber-400">
               {formatCurrency(progress.target)}
             </span>
             <ChevronDown className={`w-3.5 h-3.5 text-zinc-400 transition-transform duration-200 ${isEditing ? 'rotate-180' : ''}`} />
-          </button>
+          </motion.button>
         </div>
       </div>
 
       {/* Goal Dropdown Sheet */}
-      {isEditing && (
-        <div className="p-3.5 rounded-2xl bg-white/90 dark:bg-zinc-900/90 backdrop-blur-2xl border border-black/[0.08] dark:border-white/[0.1] shadow-xl flex flex-col gap-2.5 animate-in fade-in duration-150">
-          <div className="flex items-center justify-between text-xs text-zinc-500 dark:text-zinc-400">
-            <span>Выберите цель на смену:</span>
-            <button onClick={() => setIsEditing(false)} className="text-zinc-400 hover:text-zinc-700 dark:hover:text-white">
-              <X className="w-3.5 h-3.5" />
-            </button>
-          </div>
-
-          <div className="grid grid-cols-4 gap-1.5">
-            {presets.map(p => (
+      <AnimatePresence>
+        {isEditing && (
+          <motion.div
+            initial={{ opacity: 0, y: -8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -8 }}
+            transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
+            className="p-4 rounded-3xl liquid-glass-elevated shadow-xl flex flex-col gap-2.5"
+          >
+            <div className="flex items-center justify-between text-xs text-zinc-500 dark:text-zinc-400">
+              <span className="font-medium">Выберите цель на смену:</span>
               <button
-                key={p}
                 type="button"
-                onClick={() => handleSelectPreset(p)}
-                className={`py-2 px-2 rounded-xl text-xs font-mono font-semibold transition active:scale-95 ${
-                  targetGoal === p
-                    ? 'bg-amber-400 text-black shadow-sm'
-                    : 'bg-black/[0.03] dark:bg-zinc-950 border border-black/[0.06] dark:border-zinc-800 text-zinc-700 dark:text-zinc-300 hover:border-zinc-400'
-                }`}
+                onClick={() => setIsEditing(false)}
+                aria-label="Закрыть выбор цели"
+                className="w-11 h-11 min-w-[44px] min-h-[44px] flex items-center justify-center -mr-2 rounded-lg text-zinc-400 hover:text-zinc-700 dark:hover:text-white cursor-pointer transition-colors"
               >
-                {p / 1000}к ₽
+                <X className="w-4 h-4" />
               </button>
-            ))}
-          </div>
+            </div>
 
-          <form onSubmit={handleCustomSubmit} className="flex items-center gap-2 pt-1 border-t border-black/[0.04] dark:border-zinc-800/60">
-            <input
-              type="number"
-              inputMode="numeric"
-              step="500"
-              placeholder="Другая сумма..."
-              value={customGoal}
-              onChange={e => setCustomGoal(e.target.value)}
-              className="flex-1 px-3 py-1.5 bg-black/[0.03] dark:bg-zinc-950 border border-black/[0.08] dark:border-zinc-800 rounded-xl text-zinc-900 dark:text-white font-mono text-xs focus:outline-none focus:border-amber-400"
-            />
-            <button
-              type="submit"
-              className="px-3.5 py-1.5 rounded-xl bg-amber-400 text-black text-xs font-semibold flex items-center gap-1 active:scale-95"
-            >
-              <Check className="w-3 h-3" />
-              <span>ОК</span>
-            </button>
-          </form>
-        </div>
-      )}
+            <div className="grid grid-cols-4 gap-1.5">
+              {presets.map(p => (
+                <motion.button
+                  whileTap={{ scale: 0.97 }}
+                  key={p}
+                  type="button"
+                  onClick={() => handleSelectPreset(p)}
+                  className={`min-h-[44px] py-2 px-2 rounded-xl text-xs font-mono font-semibold flex items-center justify-center transition cursor-pointer ${
+                    targetGoal === p
+                      ? 'bg-amber-400 text-black shadow-sm font-bold'
+                      : 'liquid-glass-card text-zinc-700 dark:text-zinc-300 hover:border-amber-400/50'
+                  }`}
+                >
+                  {p / 1000}к ₽
+                </motion.button>
+              ))}
+            </div>
+
+            <form onSubmit={handleCustomSubmit} className="flex items-center gap-2 pt-1 border-t border-black/[0.04] dark:border-white/[0.06]">
+              <input
+                type="number"
+                inputMode="numeric"
+                step="500"
+                placeholder="Другая сумма..."
+                value={customGoal}
+                onChange={e => setCustomGoal(e.target.value)}
+                className="flex-1 min-h-[44px] px-3.5 py-2 liquid-glass-input text-zinc-900 dark:text-white font-mono text-[16px] md:text-xs focus:outline-none focus:border-amber-400"
+              />
+              <motion.button
+                whileTap={{ scale: 0.97 }}
+                type="submit"
+                className="min-h-[44px] min-w-[56px] px-4 py-2 rounded-xl bg-amber-400 text-black text-xs font-semibold flex items-center justify-center gap-1 shadow-sm transition cursor-pointer"
+              >
+                <Check className="w-3.5 h-3.5" />
+                <span>ОК</span>
+              </motion.button>
+            </form>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Thin Sleek Progress Line */}
-      <div className="w-full h-1.5 bg-black/[0.06] dark:bg-zinc-800/80 rounded-full overflow-hidden">
+      <div className="w-full h-2 bg-black/[0.06] dark:bg-white/[0.08] rounded-full overflow-hidden">
         <div
           className={`h-full rounded-full transition-all duration-500 ease-out ${
             progress.isAchieved ? 'bg-emerald-500 dark:bg-emerald-400' : 'bg-amber-500 dark:bg-amber-400'

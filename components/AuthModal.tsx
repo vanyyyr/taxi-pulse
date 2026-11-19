@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Phone, Lock, ArrowRight, Car, AlertCircle, Delete } from 'lucide-react';
 import { loginOrRegisterDriver, formatPhone, normalizePhone } from '@/lib/storage';
 import { DriverProfile } from '@/lib/types';
@@ -34,26 +34,7 @@ export function AuthModal({ onSuccess }: AuthModalProps) {
     setStep('pin');
   };
 
-  const handlePinKey = (digit: string) => {
-    if (pin.length < 4) {
-      const nextPin = pin + digit;
-      setPin(nextPin);
-      setError(null);
-
-      if (nextPin.length === 4) {
-        submitLogin(nextPin);
-      }
-    }
-  };
-
-  const handleBackspace = () => {
-    if (pin.length > 0) {
-      setPin(pin.slice(0, -1));
-      setError(null);
-    }
-  };
-
-  const submitLogin = async (pinToSubmit: string) => {
+  const submitLogin = useCallback(async (pinToSubmit: string) => {
     setLoading(true);
     setError(null);
     try {
@@ -70,10 +51,52 @@ export function AuthModal({ onSuccess }: AuthModalProps) {
     } finally {
       setLoading(false);
     }
-  };
+  }, [phone, onSuccess]);
+
+  const handlePinKey = useCallback((digit: string) => {
+    if (pin.length < 4) {
+      const nextPin = pin + digit;
+      setPin(nextPin);
+      setError(null);
+
+      if (nextPin.length === 4) {
+        submitLogin(nextPin);
+      }
+    }
+  }, [pin, submitLogin]);
+
+  const handleBackspace = useCallback(() => {
+    if (pin.length > 0) {
+      setPin(prev => prev.slice(0, -1));
+      setError(null);
+    }
+  }, [pin]);
+
+  const pinInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (step !== 'pin' || loading) return;
+
+    if (pinInputRef.current) {
+      pinInputRef.current.focus();
+    }
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key >= '0' && e.key <= '9') {
+        e.preventDefault();
+        handlePinKey(e.key);
+      } else if (e.key === 'Backspace') {
+        e.preventDefault();
+        handleBackspace();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [step, loading, handlePinKey, handleBackspace]);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 dark:bg-black/80 backdrop-blur-xl px-4 py-6 safe-top safe-bottom">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 dark:bg-black/80 backdrop-blur-xl px-4 py-6 safe-top safe-bottom safe-left safe-right">
       <div className="w-full max-w-sm rounded-3xl bg-white/90 dark:bg-zinc-900/90 backdrop-blur-2xl border border-black/[0.08] dark:border-white/[0.1] p-6 shadow-2xl flex flex-col items-center text-zinc-900 dark:text-white">
         {/* Logo */}
         <div className="w-12 h-12 rounded-2xl bg-black/[0.04] dark:bg-zinc-850 border border-black/[0.06] dark:border-zinc-700/60 flex items-center justify-center mb-3">
@@ -106,7 +129,7 @@ export function AuthModal({ onSuccess }: AuthModalProps) {
                   placeholder="+7 (999) 000-00-00"
                   value={phone}
                   onChange={handlePhoneChange}
-                  className="w-full min-h-[46px] pl-10 pr-3 py-2.5 bg-black/[0.03] dark:bg-zinc-950 border border-black/[0.08] dark:border-zinc-800 rounded-2xl text-zinc-900 dark:text-white font-mono text-sm focus:outline-none focus:border-amber-400 shadow-sm"
+                  className="w-full min-h-[46px] pl-10 pr-3 py-2.5 bg-black/[0.03] dark:bg-zinc-950 border border-black/[0.08] dark:border-zinc-800 rounded-2xl text-zinc-900 dark:text-white font-mono text-[16px] md:text-sm focus:outline-none focus:border-amber-400 shadow-sm"
                 />
               </div>
             </div>
@@ -114,7 +137,7 @@ export function AuthModal({ onSuccess }: AuthModalProps) {
             <button
               type="submit"
               disabled={normalizePhone(phone).length < 10}
-              className="w-full min-h-[46px] py-3 px-4 bg-amber-400 hover:bg-amber-300 disabled:opacity-40 text-black font-semibold rounded-2xl flex items-center justify-center gap-1.5 transition active:scale-[0.98] shadow-sm"
+              className="w-full min-h-[46px] py-3 px-4 bg-amber-400 hover:bg-amber-300 disabled:opacity-40 text-black font-semibold rounded-2xl flex items-center justify-center gap-1.5 transition active:scale-[0.98] shadow-sm cursor-pointer"
             >
               <span>Продолжить</span>
               <ArrowRight className="w-4 h-4" />
@@ -122,7 +145,7 @@ export function AuthModal({ onSuccess }: AuthModalProps) {
           </form>
         ) : (
           <div className="w-full flex flex-col items-center">
-            <div className="flex items-center justify-between w-full mb-3">
+            <div className="flex items-center justify-between w-full mb-2">
               <span className="text-xs font-mono text-zinc-500 dark:text-zinc-400">{phone}</span>
               <button
                 type="button"
@@ -131,7 +154,7 @@ export function AuthModal({ onSuccess }: AuthModalProps) {
                   setPin('');
                   setError(null);
                 }}
-                className="text-xs text-amber-500 dark:text-amber-400 hover:underline"
+                className="min-h-[44px] min-w-[44px] px-2 flex items-center justify-center text-xs text-amber-500 dark:text-amber-400 hover:underline cursor-pointer transition active:scale-95"
               >
                 Изменить
               </button>
@@ -141,6 +164,27 @@ export function AuthModal({ onSuccess }: AuthModalProps) {
               <Lock className="w-3.5 h-3.5 text-amber-500" />
               <span>4-значный PIN</span>
             </div>
+
+            {/* Accessible keyboard/screen-reader PIN input */}
+            <input
+              ref={pinInputRef}
+              type="password"
+              inputMode="numeric"
+              pattern="[0-9]*"
+              maxLength={4}
+              value={pin}
+              autoFocus
+              onChange={e => {
+                const val = e.target.value.replace(/\D/g, '').slice(0, 4);
+                setPin(val);
+                setError(null);
+                if (val.length === 4) {
+                  submitLogin(val);
+                }
+              }}
+              className="opacity-0 absolute -z-10 pointer-events-none w-0 h-0"
+              aria-label="4-значный PIN-код"
+            />
 
             {/* PIN Indicator Dots */}
             <div className="flex items-center gap-3.5 mb-5">
@@ -164,7 +208,7 @@ export function AuthModal({ onSuccess }: AuthModalProps) {
                   type="button"
                   disabled={loading}
                   onClick={() => handlePinKey(d)}
-                  className="min-h-[48px] rounded-2xl bg-black/[0.03] dark:bg-zinc-950 hover:bg-black/[0.08] dark:hover:bg-zinc-800 active:scale-95 text-zinc-900 dark:text-white font-mono text-lg font-medium flex items-center justify-center transition border border-black/[0.06] dark:border-zinc-800"
+                  className="min-h-[48px] rounded-2xl bg-black/[0.03] dark:bg-zinc-950 hover:bg-black/[0.08] dark:hover:bg-zinc-800 active:scale-95 text-zinc-900 dark:text-white font-mono text-lg font-medium flex items-center justify-center transition border border-black/[0.06] dark:border-zinc-800 cursor-pointer"
                 >
                   {d}
                 </button>
@@ -174,7 +218,7 @@ export function AuthModal({ onSuccess }: AuthModalProps) {
                 type="button"
                 disabled={loading}
                 onClick={() => handlePinKey('0')}
-                className="min-h-[48px] rounded-2xl bg-black/[0.03] dark:bg-zinc-950 hover:bg-black/[0.08] dark:hover:bg-zinc-800 active:scale-95 text-zinc-900 dark:text-white font-mono text-lg font-medium flex items-center justify-center transition border border-black/[0.06] dark:border-zinc-800"
+                className="min-h-[48px] rounded-2xl bg-black/[0.03] dark:bg-zinc-950 hover:bg-black/[0.08] dark:hover:bg-zinc-800 active:scale-95 text-zinc-900 dark:text-white font-mono text-lg font-medium flex items-center justify-center transition border border-black/[0.06] dark:border-zinc-800 cursor-pointer"
               >
                 0
               </button>
@@ -182,7 +226,8 @@ export function AuthModal({ onSuccess }: AuthModalProps) {
                 type="button"
                 disabled={loading || pin.length === 0}
                 onClick={handleBackspace}
-                className="min-h-[48px] rounded-2xl bg-black/[0.02] dark:bg-zinc-950/60 hover:bg-black/[0.06] dark:hover:bg-zinc-800 active:scale-95 text-zinc-400 hover:text-zinc-700 dark:hover:text-white flex items-center justify-center transition border border-black/[0.04] dark:border-zinc-800/60"
+                aria-label="Стереть цифру"
+                className="min-h-[48px] rounded-2xl bg-black/[0.02] dark:bg-zinc-950/60 hover:bg-black/[0.06] dark:hover:bg-zinc-800 active:scale-95 text-zinc-400 hover:text-zinc-700 dark:hover:text-white flex items-center justify-center transition border border-black/[0.04] dark:border-zinc-800/60 cursor-pointer disabled:opacity-40"
               >
                 <Delete className="w-4 h-4" />
               </button>

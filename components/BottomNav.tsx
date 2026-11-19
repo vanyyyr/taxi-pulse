@@ -38,17 +38,20 @@ export function BottomNav({ currentTab, onChangeTab, hasActiveShift }: BottomNav
   ];
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-40 bg-white/80 dark:bg-black/70 backdrop-blur-2xl border-t border-black/[0.06] dark:border-white/[0.08] safe-bottom transition-colors duration-300">
+    <nav className="fixed bottom-0 left-0 right-0 z-40 liquid-glass-elevated rounded-none border-x-0 border-b-0 border-t border-black/[0.06] dark:border-white/[0.08] safe-bottom safe-left safe-right transition-colors duration-300">
       <div className="max-w-md mx-auto px-4 h-14 flex items-center justify-around">
         {tabs.map(tab => {
           const Icon = tab.icon;
           const isActive = currentTab === tab.id;
 
           return (
-            <button
+            <motion.button
+              whileTap={{ scale: 0.95 }}
               key={tab.id}
+              type="button"
               onClick={() => onChangeTab(tab.id)}
-              className={`relative min-h-[44px] min-w-[56px] flex flex-col items-center justify-center rounded-xl transition-colors duration-200 active:scale-95 ${
+              aria-label={tab.label}
+              className={`relative min-h-[44px] min-w-[56px] flex flex-col items-center justify-center rounded-xl transition-colors duration-200 cursor-pointer ${
                 isActive
                   ? 'text-amber-500 dark:text-amber-400 font-semibold'
                   : 'text-zinc-400 dark:text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-200'
@@ -68,7 +71,7 @@ export function BottomNav({ currentTab, onChangeTab, hasActiveShift }: BottomNav
                   transition={{ type: 'spring', stiffness: 500, damping: 35 }}
                 />
               )}
-            </button>
+            </motion.button>
           );
         })}
       </div>

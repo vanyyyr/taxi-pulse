@@ -10,6 +10,8 @@ create table if not exists public.driver_profiles (
   fuel_type text default 'ai95',
   default_rent numeric not null default 2200,
   default_goal numeric not null default 5000,
+  default_fuel_consumption numeric not null default 8.5,
+  default_fuel_price numeric not null default 58,
   pin_hash text not null,
   created_at timestamp with time zone default timezone('utc'::text, now()) not null
 );
@@ -35,6 +37,7 @@ create table if not exists public.shifts (
   fuel_cost numeric not null default 0,
   rent_cost numeric not null default 0,
   other_expenses_total numeric not null default 0,
+  expenses jsonb default '[]'::jsonb,
   
   -- Расчетные метрики
   total_expenses numeric not null default 0,

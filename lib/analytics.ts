@@ -153,8 +153,8 @@ export function generateSmartInsights(shifts: Shift[], dailyGoal: number = 5000)
       {
         id: 'start_tip',
         type: 'info',
-        title: 'Умный советник активирован',
-        message: 'Добавь свою первую смену, и система рассчитает точную себестоимость километра, чистый доход в час и подскажет, как сэкономить на расходах.',
+        title: 'Персональная аналитика',
+        message: 'После завершения первой смены здесь появятся расчет чистой ставки в час, себестоимость километра и рекомендации по оптимизации расходов.',
       }
     ];
   }
@@ -230,7 +230,7 @@ export function generateSmartInsights(shifts: Shift[], dailyGoal: number = 5000)
       id: 'target_pacing',
       type: 'tip',
       title: `План на цель ${formatCurrency(dailyGoal)} чистыми`,
-      message: `При твоем среднем чистом доходе ${formatCurrency(stats.avg_hourly_rate)}/час для выполнения цели 5 000 ₽ тебе требуется около ${targetHoursNeeded} ч на линии (с учетом вычета аренды и бензина).`,
+      message: `При твоем среднем чистом доходе ${formatCurrency(stats.avg_hourly_rate)}/час для выполнения цели ${formatCurrency(dailyGoal)} тебе требуется около ${targetHoursNeeded} ч на линии (с учетом вычета аренды и бензина).`,
       metric: `~${targetHoursNeeded} ч на смену`,
     });
   }

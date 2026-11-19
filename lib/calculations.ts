@@ -1,4 +1,4 @@
-import { ExpenseItem, Shift } from './types';
+import { ExpenseItem } from './types';
 
 export interface ShiftInput {
   date: string;
@@ -28,15 +28,23 @@ export function calculateOtherExpensesTotal(expenses: ExpenseItem[]): number {
  * Рассчитывает длительность смены в часах по времени старта и конца
  */
 export function calculateDurationHours(startTimeStr: string, endTimeStr?: string): number {
-  if (!endTimeStr) return 0;
+  if (!startTimeStr || !endTimeStr) return 0;
 
   try {
     // Поддержка формата HH:mm
     if (startTimeStr.includes(':') && !startTimeStr.includes('T')) {
-      const [startH, startM] = startTimeStr.split(':').map(Number);
-      const [endH, endM] = endTimeStr.split(':').map(Number);
+      const startParts = startTimeStr.split(':');
+      const endParts = endTimeStr.split(':');
+      if (startParts.length < 2 || endParts.length < 2) return 0;
 
-      let startMinutes = startH * 60 + startM;
+      const startH = Number(startParts[0]);
+      const startM = Number(startParts[1]);
+      const endH = Number(endParts[0]);
+      const endM = Number(endParts[1]);
+
+      if (isNaN(startH) || isNaN(startM) || isNaN(endH) || isNaN(endM)) return 0;
+
+      const startMinutes = startH * 60 + startM;
       let endMinutes = endH * 60 + endM;
 
       if (endMinutes < startMinutes) {
@@ -79,7 +87,6 @@ export function calculateShiftMetrics(input: ShiftInput): {
   if (!duration_hours && input.start_time && input.end_time) {
     duration_hours = calculateDurationHours(input.start_time, input.end_time);
   }
-  duration_hours = Math.max(0.1, duration_hours);
 
   // Километраж
   let mileage_km = Number(input.mileage_km) || 0;
@@ -92,12 +99,12 @@ export function calculateShiftMetrics(input: ShiftInput): {
   const fuel_liters = Number(input.fuel_liters) || 0;
   const rent_cost = Number(input.rent_cost) || 0;
 
-  const other_expenses_total = calculateOtherExpensesTotal(input.expenses);
-  const total_expenses = rent_cost + fuel_cost + other_expenses_total;
-  const net_profit = gross_revenue - total_expenses;
+  const other_expenses_total = Number(calculateOtherExpensesTotal(input.expenses).toFixed(2));
+  const total_expenses = Number((rent_cost + fuel_cost + other_expenses_total).toFixed(2));
+  const net_profit = Number((gross_revenue - total_expenses).toFixed(2));
 
-  // Чистый доход в час
-  const hourly_rate = duration_hours > 0 ? Math.round(net_profit / duration_hours) : 0;
+  // Чистый доход в час: рассчитывается только если смена длится не менее 15 минут (0.25 часа)
+  const hourly_rate = duration_hours >= 0.25 ? Math.round(net_profit / duration_hours) : 0;
 
   // Себестоимость и доход на км
   const cost_per_km = mileage_km > 0 ? Math.round((total_expenses / mileage_km) * 10) / 10 : 0;
